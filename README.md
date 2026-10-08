@@ -1,4 +1,4 @@
-# ResumeAI — AI-Powered ATS Resume Checker
+# MyResumeAI — AI-Powered ATS Resume Checker
 
 A complete, production-style MERN-stack web app that lets users upload their resume (PDF / DOCX), paste a job description, and receive a detailed, AI-powered ATS-style report — including an overall score, matched/missing keywords, strengths, weaknesses, AI suggestions, per-section analysis, and an AI section-improvement tool. All analyses are saved per-user and can be revisited any time.
 

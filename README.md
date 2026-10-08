@@ -232,6 +232,130 @@ A user can only ever see / modify **their own** analyses — enforced in every c
 
 ---
 
+## 🌐 Deployment (Vercel Frontend + Render Backend)
+
+Target deployment:
+- **Frontend**: `https://cvreaderai.vercel.app` (already set up for you on Vercel)
+- **Backend**: any Render `*.onrender.com` URL (created in next section)
+
+Both apps talk to each other via the changes already in the code (CORS allowlist on the backend, `VITE_API_URL` on the frontend).
+
+### Step 1 — Deploy the backend on Render
+
+1. Push the full repo (or just the `server/` folder) to GitHub / GitLab.
+2. In Render → **New +** → **Web Service**:
+   - **Runtime**: Node
+   - **Branch**: `main`
+   - **Root Directory**: `server`   ← important (so Render installs `server/package.json`)
+   - **Build Command**: `npm install`
+   - **Start Command**: `node server.js`
+   - **Plan**: Free (or Starter)
+3. In **Environment** → **Environment Variables** add these:
+
+   | Key                 | Value / Action                                                           |
+   |---------------------|--------------------------------------------------------------------------|
+   | `NODE_ENV`          | `production`                                                             |
+   | `PORT`              | `10000`  (Render convention)                                            |
+   | `MONGODB_URI`       | Paste your MongoDB Atlas connection string (`mongodb+srv://...`)        |
+   | `JWT_SECRET`        | Click **Generate** (or any long random string you like)                 |
+   | `GROQ_API_KEY`      | Paste your Groq API key (`gsk_...`)                                     |
+   | `MAX_FILE_SIZE`     | `5242880`                                                                |
+   | `CLIENT_URL`        | `https://cvreaderai.vercel.app`                                         |
+   | `CLIENT_ORIGINS`    | `https://cvreaderai.vercel.app`                                         |
+
+   (You can also just upload `server/render.yaml` as a Blueprint for the same effect.)
+
+4. Click **Create Web Service** and wait for Render to build + deploy. When it finishes, copy
+   the **public URL** Render shows you. It will look like:
+   ```
+   https://cv-reader-ai-backend.onrender.com
+   ```
+   → this is your `RENDER_BACKEND_URL`, keep it for Step 2.
+
+> 💡 CORS is pre-configured on the backend:
+> - `https://cvreaderai.vercel.app` is always in the allow list
+> - Any `*.onrender.com` origin is allowed automatically
+> - Vercel preview deployments like `cvreaderai-git-fork-xyz.vercel.app` are auto-allowed
+> - Extra origins can be added via the `CLIENT_ORIGINS` env var (comma-separated)
+
+### Step 2 — Tell Vercel frontend about the Render backend
+
+Your frontend reads the backend URL from `VITE_API_URL` (a Vite public env var that is
+embedded at **build time**, which is why you can re-deploy the frontend after changing it).
+
+In the Vercel dashboard for **cvreaderai**:
+
+1. Go to **Project** → **Settings** → **Environment Variables**.
+2. Add a new variable:
+   - **Name**: `VITE_API_URL`
+   - **Value**: your Render backend URL, **without** a trailing `/api`.
+     Example:
+     ```
+     https://cv-reader-ai-backend.onrender.com
+     ```
+   - **Environments**: check ✅ Production, ✅ Preview, ✅ Development (or just Production if you prefer).
+3. Save it.
+4. Go to Vercel **Deployments**, click the **⋯** menu on the latest Production deployment
+   → **Redeploy** (check "Build with fresh environment variables").
+
+That single redeploy is what glues them together. After it finishes, visiting
+`https://cvreaderai.vercel.app` will send every API call directly to your Render backend.
+
+#### What the frontend actually does
+([client/src/services/api.js](file:///c:/Users/Dell/Desktop/mini%20web%20project/client/src/services/api.js)):
+
+- If `VITE_API_URL` is set AND you are not browsing from `localhost` / `127.0.0.1`:
+  → uses `{VITE_API_URL}/api/...` (absolute URL, hits Render directly)
+- Otherwise (local dev) → uses `/api/...` and lets the Vite dev proxy forward to
+  `http://localhost:5000` (unchanged, so local development keeps working).
+
+### Step 3 — Verify the connection
+
+After both deploys finish:
+1. Open the backend health check directly:
+   `https://<your-render-service>.onrender.com/api/health`
+   → you should see `{ success: true, message: "ResumeAI ATS Checker API is running" }`
+2. Open `https://cvreaderai.vercel.app` → Register → Analyze Resume.
+3. Open browser DevTools → Network, click **Run ATS Analysis**.
+   - Every XHR/fetch should be going to `https://<your-render-service>.onrender.com/api/...`.
+   - If you see any CORS errors in the console, check the Render service logs (there is a
+     `[CORS] blocked origin:` log line that prints exactly which origin was rejected —
+     copy it and add it to the `CLIENT_ORIGINS` env var on Render, then re-deploy).
+
+### Step 4 (optional) — use client env for local testing against Render
+
+To make your *local* frontend talk to the real Render backend (bypassing the local 5000 server):
+```bash
+# client/.env.local
+VITE_API_URL=https://cv-reader-ai-backend.onrender.com
+```
+Then restart `npm run dev` in the client — `localhost:5173` now hits Render directly
+(useful for debugging CORS without re-deploying to Vercel).
+
+### Files changed / added for deployment
+
+| File | What it does |
+|------|--------------|
+| [server/server.js](file:///c:/Users/Dell/Desktop/mini%20web%20project/server/server.js) | CORS allow-list function + Render/Vercel wildcard rules + 24h preflight cache |
+| [server/.env.example](file:///c:/Users/Dell/Desktop/mini%20web%20project/server/.env.example) | Documents `CLIENT_ORIGINS` / `CLIENT_URL` env vars for Render |
+| [server/render.yaml](file:///c:/Users/Dell/Desktop/mini%20web%20project/server/render.yaml) | Render Blueprint: `rootDir: server`, all env vars, `node server.js` start command |
+| [client/src/services/api.js](file:///c:/Users/Dell/Desktop/mini%20web%20project/client/src/services/api.js) | Chooses `{VITE_API_URL}/api` in production, falls back to `/api` for local proxy |
+| [client/.env.example](file:///c:/Users/Dell/Desktop/mini%20web%20project/client/.env.example) | Documents `VITE_API_URL` (empty for local dev) |
+| [client/vercel.json](file:///c:/Users/Dell/Desktop/mini%20web%20project/client/vercel.json) | SPA rewrites so browser refresh on `/history`, `/report/:id`, etc. return `index.html` |
+| [client/vite.config.js](file:///c:/Users/Dell/Desktop/mini%20web%20project/client/vite.config.js) | Preserves the dev proxy (`/api → localhost:5000`) — production ignores it |
+
+### Production build status (tested locally)
+```
+vite v5.4.21 building for production...
+✓ 2383 modules transformed.
+dist/index.html                   0.92 kB
+dist/assets/index-*.css          43.63 kB   gzip: 7.15 kB
+dist/assets/index-*.js          701.94 kB   gzip: 203.74 kB
+✓ built in 29.05s
+```
+
+---
+
 ## 🧠 Important AI Rules (Built-in Prompts)
 
 The Groq system prompts instruct the model to:

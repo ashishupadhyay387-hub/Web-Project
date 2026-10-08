@@ -1,0 +1,27 @@
+# Render blueprint example — paste into a render.yaml in a repo (or configure manually)
+services:
+  - type: web
+    name: cv-reader-ai-backend
+    runtime: node
+    region: oregon  # or your preferred region
+    plan: free  # upgrade as needed
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000  # Render default
+      - key: MONGODB_URI
+        sync: false  # set in Render dashboard (mongodb+srv://...)
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GROQ_API_KEY
+        sync: false  # set in Render dashboard (gsk_...)
+      - key: MAX_FILE_SIZE
+        value: 5242880
+      - key: CLIENT_ORIGINS
+        value: https://cvreaderai.vercel.app,https://web-project-glhl.onrender.com
+      - key: CLIENT_URL
+        value: https://cvreaderai.vercel.app

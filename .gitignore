@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.local
+.env.*.local
+uploads/
+server/uploads/*
+!server/uploads/.gitkeep
+*.log
+npm-debug.log*
+.DS_Store
+client/dist/
+client/.vite/
+.vscode/
+.idea/
+*.swp
+*.swo
+coverage/
